@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>SIMI ERP - Login</title>
+<style>
+body{font-family:Arial;display:flex;justify-content:center;align-items:center;height:100vh;background:#f0f2f5;}
+.box{background:white;padding:30px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.1);width:300px;}
+input{width:100%;padding:8px;margin:8px 0;box-sizing:border-box;}
+button{width:100%;padding:10px;background:#0066cc;color:white;border:none;border-radius:4px;cursor:pointer;}
+img{max-width:100%;}
+.hidden{display:none;}
+</style>
+</head>
+<body>
+<div class="box">
+<h2>SIMI ERP</h2>
+<div id="step1">
+<input type="text" id="username" placeholder="Usuario">
+<input type="password" id="password" placeholder="Contraseña">
+<button onclick="login()">Ingresar</button>
+</div>
+<div id="step2" class="hidden">
+<div id="qrContainer"></div>
+<input type="text" id="mfaToken" placeholder="Código de 6 dígitos">
+<button onclick="verifyMfa()">Verificar</button>
+</div>
+<p id="msg"></p>
+</div>
+<script>
+async function login(){
+const username=document.getElementById('username').value;
+const password=document.getElementById('password').value;
+const res=await fetch('/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})});
+const data=await res.json();
+if(res.ok){
+document.getElementById('step1').classList.add('hidden');
+document.getElementById('step2').classList.remove('hidden');
+if(data.qr){document.getElementById('qrContainer').innerHTML='<p>'+data.message+'</p><img src="'+data.qr+'">';}
+else{document.getElementById('msg').innerText=data.message;}
+}else{document.getElementById('msg').innerText=data.error;}
+}
+async function verifyMfa(){
+const token=document.getElementById('mfaToken').value;
+const res=await fetch('/verify-mfa',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token})});
+const data=await res.json();
+if(res.ok){localStorage.setItem('token',data.token);document.getElementById('msg').innerText='Login exitoso! Token guardado.';}
+else{document.getElementById('msg').innerText=data.error;}
+}
+</script>
+</body>
+</html>
