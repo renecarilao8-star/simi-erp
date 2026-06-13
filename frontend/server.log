@@ -1,0 +1,4 @@
+nohup: ignoring input
+◇ injected env (8) from .env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+◇ injected env (0) from .env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
+SIMI ERP corriendo en puerto 3000

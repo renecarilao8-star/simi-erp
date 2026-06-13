@@ -21,6 +21,25 @@ app.get('/', (req, res) => {
   res.sendFile(__dirname + '/views/login.html');
 });
 
+app.post('/register', async (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Usuario y contraseña requeridos' });
+  }
+  try {
+    const exists = await pool.query('SELECT id FROM usuarios WHERE username=$1', [username]);
+    if (exists.rows.length > 0) {
+      return res.status(400).json({ error: 'El usuario ya existe' });
+    }
+    const hash = await bcrypt.hash(password, 10);
+    await pool.query('INSERT INTO usuarios (username, password_hash) VALUES ($1, $2)', [username, hash]);
+    res.json({ message: 'Usuario creado correctamente. Ahora puedes iniciar sesión.' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error de servidor' });
+  }
+});
+
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
   try {
@@ -67,14 +86,204 @@ app.post('/verify-mfa', async (req, res) => {
 
   req.session.mfaPending = false;
   req.session.authenticated = true;
+  req.session.user = req.session.username; // usado por el dashboard
 
   const jwtToken = jwt.sign(
     { userId: req.session.userId, username: req.session.username },
     process.env.JWT_SECRET,
     { expiresIn: '1h' }
   );
+  req.session.token = jwtToken;
 
-  res.json({ message: 'Autenticado correctamente', token: jwtToken });
+  res.json({ message: 'Autenticado correctamente', token: jwtToken, redirect: '/dashboard' });
+});
+
+// ---------- DASHBOARD ----------
+app.get('/dashboard', async (req, res) => {
+
+    if (!req.session.user) {
+        return res.redirect('/');
+    }
+
+    const productos = await pool.query(
+        'SELECT * FROM productos ORDER BY id'
+    );
+
+    let filas = '';
+
+    productos.rows.forEach(p => {
+        filas += `
+        <tr>
+            <td>${p.id}</td>
+            <td>${p.nombre}</td>
+            <td>${p.stock}</td>
+            <td>$${p.precio}</td>
+        </tr>
+        `;
+    });
+
+    res.send(`
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>SIMI ERP</title>
+
+<style>
+
+body{
+    font-family: Arial;
+    background:#f4f4f4;
+    margin:0;
+}
+
+header{
+    background:#1565c0;
+    color:white;
+    padding:15px;
+}
+
+.container{
+    padding:20px;
+}
+
+.card{
+    background:white;
+    padding:20px;
+    margin-bottom:20px;
+    border-radius:8px;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+}
+
+th,td{
+    border:1px solid #ddd;
+    padding:10px;
+}
+
+th{
+    background:#1565c0;
+    color:white;
+}
+
+input{
+    padding:10px;
+    margin:5px;
+}
+
+button{
+    padding:10px 15px;
+    background:#1565c0;
+    color:white;
+    border:none;
+    cursor:pointer;
+}
+
+button:hover{
+    background:#0d47a1;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<header>
+    <h1>Farmacias SIMI ERP</h1>
+    <p>Usuario conectado: ${req.session.user}</p>
+</header>
+
+<div class="container">
+
+<div class="card">
+
+<h2>Agregar Producto</h2>
+
+<form method="POST" action="/producto">
+
+<input
+type="text"
+name="nombre"
+placeholder="Nombre producto"
+required>
+
+<input
+type="number"
+name="stock"
+placeholder="Stock"
+required>
+
+<input
+type="number"
+step="0.01"
+name="precio"
+placeholder="Precio"
+required>
+
+<button type="submit">
+Agregar
+</button>
+
+</form>
+
+</div>
+
+<div class="card">
+
+<h2>Inventario</h2>
+
+<table>
+
+<tr>
+<th>ID</th>
+<th>Producto</th>
+<th>Stock</th>
+<th>Precio</th>
+</tr>
+
+${filas}
+
+</table>
+
+</div>
+
+<div class="card">
+
+<form action="/logout" method="GET">
+<button>Cerrar Sesión</button>
+</form>
+
+</div>
+
+</div>
+
+</body>
+</html>
+`);
+});
+
+// ---------- AGREGAR PRODUCTO ----------
+app.post('/producto', async (req, res) => {
+  if (!req.session.user) return res.redirect('/');
+
+  const { nombre, stock, precio } = req.body;
+  await pool.query(
+    'INSERT INTO productos (nombre, stock, precio) VALUES ($1, $2, $3)',
+    [nombre, stock, precio]
+  );
+
+  res.redirect('/dashboard');
+});
+
+// ---------- LOGOUT ----------
+app.get('/logout', (req, res) => {
+  req.session.destroy(() => {
+    res.redirect('/');
+  });
 });
 
 function authMiddleware(req, res, next) {
@@ -87,10 +296,6 @@ function authMiddleware(req, res, next) {
     next();
   });
 }
-
-app.get('/dashboard', authMiddleware, (req, res) => {
-  res.json({ message: `Bienvenido ${req.user.username}`, acceso: 'concedido' });
-});
 
 app.listen(process.env.PORT, () => {
   console.log(`SIMI ERP corriendo en puerto ${process.env.PORT}`);

@@ -19,6 +19,13 @@ img{max-width:100%;}
 <input type="text" id="username" placeholder="Usuario">
 <input type="password" id="password" placeholder="Contraseña">
 <button onclick="login()">Ingresar</button>
+<p style="text-align:center;margin-top:10px;">¿No tienes cuenta? <a href="#" onclick="showRegister()">Regístrate</a></p>
+</div>
+<div id="registerStep" class="hidden">
+<input type="text" id="regUsername" placeholder="Nuevo usuario">
+<input type="password" id="regPassword" placeholder="Nueva contraseña">
+<button onclick="register()">Crear cuenta</button>
+<p style="text-align:center;margin-top:10px;">¿Ya tienes cuenta? <a href="#" onclick="showLogin()">Inicia sesión</a></p>
 </div>
 <div id="step2" class="hidden">
 <div id="qrContainer"></div>
@@ -28,6 +35,26 @@ img{max-width:100%;}
 <p id="msg"></p>
 </div>
 <script>
+function showRegister(){
+document.getElementById('step1').classList.add('hidden');
+document.getElementById('registerStep').classList.remove('hidden');
+document.getElementById('msg').innerText='';
+}
+function showLogin(){
+document.getElementById('registerStep').classList.add('hidden');
+document.getElementById('step1').classList.remove('hidden');
+document.getElementById('msg').innerText='';
+}
+async function register(){
+const username=document.getElementById('regUsername').value;
+const password=document.getElementById('regPassword').value;
+const res=await fetch('/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})});
+const data=await res.json();
+if(res.ok){
+document.getElementById('msg').innerText=data.message;
+showLogin();
+}else{document.getElementById('msg').innerText=data.error;}
+}
 async function login(){
 const username=document.getElementById('username').value;
 const password=document.getElementById('password').value;
@@ -44,9 +71,13 @@ async function verifyMfa(){
 const token=document.getElementById('mfaToken').value;
 const res=await fetch('/verify-mfa',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token})});
 const data=await res.json();
-if(res.ok){localStorage.setItem('token',data.token);document.getElementById('msg').innerText='Login exitoso! Token guardado.';}
-else{document.getElementById('msg').innerText=data.error;}
+if(res.ok){
+localStorage.setItem('token',data.token);
+document.getElementById('msg').innerText='Login exitoso! Redirigiendo...';
+window.location.href = data.redirect || '/dashboard';
+}else{document.getElementById('msg').innerText=data.error;}
 }
 </script>
 </body>
 </html>
+
